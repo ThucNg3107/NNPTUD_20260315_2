@@ -1,7 +1,6 @@
 let userModel = require("../schemas/users");
 let bcrypt = require('bcrypt')
-let jwt = require('jsonwebtoken')
-let fs = require('fs')
+let { signAccessToken } = require('../utils/jwtHandler')
 
 module.exports = {
     CreateAnUser: async function (username, password, email, role, fullName, avatarUrl, status, loginCount) {
@@ -25,7 +24,7 @@ module.exports = {
     GetUserById: async function (id) {
         try {
             return await userModel
-                .find({
+                .findOne({
                     isDeleted: false,
                     _id: id
                 })
@@ -43,16 +42,65 @@ module.exports = {
         })
         if (user) {
             if (bcrypt.compareSync(password, user.password)) {
-                return jwt.sign({
+                return signAccessToken({
                     id: user.id
-                }, 'secret', {
-                    expiresIn: '1d'
                 })
             } else {
                 return false;
             }
         } else {
             return false;
+        }
+    },
+    ChangePassword: async function (id, oldPassword, newPassword) {
+        if (!id || !oldPassword || !newPassword) {
+            return {
+                success: false,
+                status: 400,
+                message: 'thieu thong tin'
+            }
+        }
+
+        let user = await userModel.findOne({
+            _id: id,
+            isDeleted: false
+        })
+
+        if (!user) {
+            return {
+                success: false,
+                status: 404,
+                message: 'user khong ton tai'
+            }
+        }
+
+        let isOldPasswordCorrect = bcrypt.compareSync(oldPassword, user.password)
+        if (!isOldPasswordCorrect) {
+            return {
+                success: false,
+                status: 400,
+                message: 'oldpassword khong dung'
+            }
+        }
+
+        if (oldPassword === newPassword) {
+            return {
+                success: false,
+                status: 400,
+                message: 'newpassword khong duoc trung oldpassword'
+            }
+        }
+
+        await userModel.findOneAndUpdate(
+            { _id: id, isDeleted: false },
+            { password: newPassword },
+            { new: true }
+        )
+
+        return {
+            success: true,
+            status: 200,
+            message: 'doi mat khau thanh cong'
         }
     }
 }
